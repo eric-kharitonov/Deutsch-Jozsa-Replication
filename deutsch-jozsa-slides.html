@@ -1,0 +1,711 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Deutsch-Jozsa Algorithm Replication</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: #000;
+    font-family: Calibri, 'Segoe UI', Arial, sans-serif;
+    overflow: hidden;
+    height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  #deck {
+    width: 100vw;
+    height: 100vh;
+    position: relative;
+  }
+
+  .slide {
+    position: absolute;
+    inset: 0;
+    background: #060F1D;
+    display: none;
+    padding: 0;
+    overflow: hidden;
+  }
+  .slide.active { display: flex; flex-direction: column; }
+
+  /* ── Typography ─────────────────────────────── */
+  h1 { font-size: clamp(28px,5vw,62px); font-weight: 700; color: #fff; line-height:1.1; }
+  h2 { font-size: clamp(18px,2.8vw,30px); font-weight: 700; color: #fff; }
+  h3 { font-size: clamp(13px,1.5vw,18px); font-weight: 700; color: #00AACC; }
+  p, li { font-size: clamp(11px,1.4vw,15px); color: #8CBBD0; line-height: 1.5; }
+  .accent  { color: #00AACC; }
+  .muted   { color: #456070; }
+  .white   { color: #fff; }
+  .big     { font-size: clamp(16px,2.5vw,26px); font-weight:700; color:#fff; }
+
+  /* ── Code blocks ────────────────────────────── */
+  pre {
+    background: #0C1B2E;
+    border: 1px solid #1C3A5C;
+    border-radius: 4px;
+    padding: 12px 14px;
+    font-family: Consolas, 'Courier New', monospace;
+    font-size: clamp(9px,1.1vw,12px);
+    color: #B8D8ED;
+    overflow: hidden;
+    line-height: 1.55;
+    white-space: pre;
+  }
+
+  /* ── Layout helpers ─────────────────────────── */
+  .slide-inner {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    padding: 1.8vh 2.8vw 1.5vh;
+    overflow: hidden;
+  }
+  .row { display: flex; gap: 2vw; flex: 1; overflow: hidden; }
+  .col { display: flex; flex-direction: column; gap: 1.4vh; }
+  .col-55 { flex: 0 0 54%; }
+  .col-45 { flex: 0 0 42%; }
+  .col-full { flex: 1; }
+
+  /* ── Slide header ───────────────────────────── */
+  .slide-header {
+    padding: 1.6vh 2.8vw 0;
+    border-bottom: 2px solid #00425A;
+    padding-bottom: 1vh;
+    margin-bottom: 1.5vh;
+  }
+  .slide-header h2 { margin-bottom: 0.2vh; }
+  .slide-header .sub { font-size: clamp(10px,1.2vw,13px); color:#00AACC; font-style:italic; }
+
+  /* ── Info cards ─────────────────────────────── */
+  .card {
+    background: #0C1B2E;
+    border: 1px solid #1C3A5C;
+    border-radius: 4px;
+    padding: 8px 12px;
+  }
+  .card .label {
+    font-family: Consolas, monospace;
+    font-size: clamp(9px,1.1vw,12px);
+    font-weight: 700;
+    color: #00AACC;
+    margin-bottom: 4px;
+  }
+  .card p { font-size: clamp(9px,1.1vw,12px); color: #8CBBD0; }
+
+  /* ── Accent strip cards ─────────────────────── */
+  .accent-card {
+    background: #00425A;
+    border: 1px solid #1C3A5C;
+    border-radius: 4px;
+    padding: 10px 14px;
+    text-align: center;
+  }
+
+  /* ── Decision boxes ─────────────────────────── */
+  .decision-row { display: flex; gap: 2vw; margin-top:auto; }
+  .decision-box {
+    flex: 1;
+    background: #00425A;
+    border: 2px solid #00AACC;
+    border-radius: 6px;
+    padding: 10px;
+    text-align: center;
+  }
+  .decision-box.dim {
+    background: #0C1B2E;
+    border-color: #456070;
+  }
+  .decision-box .code-val {
+    font-family: Consolas, monospace;
+    font-size: clamp(14px,2vw,22px);
+    font-weight: 700;
+    color: #fff;
+  }
+  .decision-box.dim .code-val { color: #456070; }
+  .decision-box .type-label {
+    font-size: clamp(10px,1.2vw,14px);
+    font-weight: 700;
+    color: #00AACC;
+    margin-top: 4px;
+  }
+  .decision-box.dim .type-label { color: #456070; }
+
+  /* ── Type cards (slide 2) ───────────────────── */
+  .type-card {
+    background: #0C1B2E;
+    border-radius: 4px;
+    padding: 10px 16px;
+  }
+  .type-card.on  { border: 1px solid #00AACC; }
+  .type-card.off { border: 1px solid #456070; }
+  .type-card .title { font-size: clamp(12px,1.6vw,17px); font-weight:700; text-align:center; }
+  .type-card .desc  { font-size: clamp(10px,1.2vw,13px); color:#8CBBD0; text-align:center; margin-top:3px; }
+
+  /* ── Right panel ────────────────────────────── */
+  .right-panel {
+    background: #0C1B2E;
+    border: 1px solid #1C3A5C;
+    border-radius: 4px;
+    padding: 12px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    overflow: hidden;
+  }
+  .right-panel h3 { margin-bottom: 2px; }
+  .right-panel p  { font-size: clamp(10px,1.2vw,13px); }
+
+  /* ── Left accent bar (title/conclusion) ─────── */
+  .left-bar {
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    width: 0.85%;
+    background: #00AACC;
+  }
+
+  /* ── Circuit sketch ─────────────────────────── */
+  .circuit-sketch {
+    background: #00425A;
+    border: 1px solid #1C3A5C;
+    border-radius: 4px;
+    padding: 8px 14px;
+    font-family: Consolas, monospace;
+    font-size: clamp(9px,1.05vw,12px);
+    color: #B8D8ED;
+    line-height: 1.7;
+    margin-top: auto;
+  }
+
+  /* ── Output highlight bar ───────────────────── */
+  .output-bar {
+    background: #00425A;
+    border: 1px solid #00AACC;
+    border-radius: 4px;
+    padding: 8px 14px;
+    font-family: Consolas, monospace;
+    font-size: clamp(10px,1.3vw,14px);
+    font-weight: 700;
+    color: #00AACC;
+    text-align: center;
+  }
+
+  /* ── Progress & controls ────────────────────── */
+  #progress {
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    height: 3px;
+    background: #0a1628;
+    z-index: 100;
+  }
+  #progress-bar {
+    height: 100%;
+    background: #00AACC;
+    transition: width 0.3s ease;
+  }
+  #counter {
+    position: fixed;
+    bottom: 8px; right: 14px;
+    font-family: Consolas, monospace;
+    font-size: 11px;
+    color: #456070;
+    z-index: 100;
+  }
+  #hint {
+    position: fixed;
+    bottom: 8px; left: 14px;
+    font-size: 11px;
+    color: #2a4050;
+    z-index: 100;
+  }
+
+  /* ── Bullets ────────────────────────────────── */
+  ul { list-style: none; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+  ul li::before { content: "▸  "; color: #00AACC; }
+  ul li.highlight { color: #00AACC; font-weight: 700; font-style: italic; font-size: clamp(12px,1.5vw,16px); }
+  ul li.highlight::before { content: "▶  "; }
+
+  /* ── Divider ────────────────────────────────── */
+  .divider { height: 2px; background: #00425A; border-radius:1px; flex-shrink:0; }
+
+  /* ── Slide 1 specifics ──────────────────────── */
+  .title-slide {
+    justify-content: center;
+    padding: 0 5vw 0 4vw;
+    position: relative;
+    gap: 1.2vh;
+  }
+  .title-slide .author { font-size: clamp(11px,1.4vw,16px); color: #456070; margin-top: 0.5vh; }
+
+  /* ── Section recap ──────────────────────────── */
+  .recap-card {
+    background: #0C1B2E;
+    border: 1px solid #1C3A5C;
+    border-radius: 4px;
+    padding: 10px 14px;
+  }
+  .recap-card h3 { margin-bottom: 6px; }
+  .recap-card .sec { font-size: clamp(9px,1.15vw,12px); color: #8CBBD0; padding: 3px 0; border-bottom: 1px solid #112030; }
+  .recap-card .sec:last-child { border-bottom: none; }
+
+  /* ── Footer link ────────────────────────────── */
+  .footer-link {
+    background: #00425A;
+    border: 1px solid #1C3A5C;
+    border-radius: 4px;
+    padding: 7px 14px;
+    font-size: clamp(10px,1.3vw,14px);
+    color: #B8D8ED;
+    margin-top: auto;
+  }
+</style>
+</head>
+<body>
+
+<div id="deck">
+
+  <!-- ── SLIDE 1 : TITLE ─────────────────────────────────────────────── -->
+  <div class="slide active">
+    <div class="left-bar"></div>
+    <div class="title-slide slide-inner">
+      <h1>Deutsch-Jozsa</h1>
+      <h1 class="accent" style="font-size:clamp(18px,3.2vw,36px);font-weight:400;">Algorithm Replication</h1>
+      <div class="divider" style="width:35%;margin:1.5vh 0 0.5vh;"></div>
+      <p class="author">Eric Kharitonov &nbsp;·&nbsp; Qiskit + IBM Quantum</p>
+      <!-- decorative circuit -->
+      <div style="position:absolute;right:5vw;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:1.4vh;opacity:0.7;">
+        <div style="display:flex;align-items:center;gap:8px;">
+          <div style="width:20px;height:2px;background:#00425A;"></div>
+          <div style="border:1px solid #00AACC;background:#00425A;padding:3px 6px;font-family:Consolas;font-size:10px;color:#00AACC;font-weight:700;">H</div>
+          <div style="width:20px;height:2px;background:#00425A;"></div>
+          <div style="border:1px solid #00AACC;background:#00425A;padding:3px 6px;font-family:Consolas;font-size:10px;color:#00AACC;font-weight:700;">U</div>
+          <div style="width:20px;height:2px;background:#00425A;"></div>
+          <div style="border:1px solid #00AACC;background:#00425A;padding:3px 6px;font-family:Consolas;font-size:10px;color:#00AACC;font-weight:700;">H</div>
+          <div style="width:10px;height:2px;background:#00425A;"></div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <div style="width:20px;height:2px;background:#00425A;"></div>
+          <div style="border:1px solid #00AACC;background:#00425A;padding:3px 6px;font-family:Consolas;font-size:10px;color:#00AACC;font-weight:700;">H</div>
+          <div style="width:20px;height:2px;background:#00425A;"></div>
+          <div style="border:1px solid #00AACC;background:#00425A;padding:3px 6px;font-family:Consolas;font-size:10px;color:#00AACC;font-weight:700;">U</div>
+          <div style="width:20px;height:2px;background:#00425A;"></div>
+          <div style="border:1px solid #00AACC;background:#00425A;padding:3px 6px;font-family:Consolas;font-size:10px;color:#00AACC;font-weight:700;">H</div>
+          <div style="width:10px;height:2px;background:#00425A;"></div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <div style="width:20px;height:2px;background:#00425A;"></div>
+          <div style="border:1px solid #00AACC;background:#00425A;padding:3px 6px;font-family:Consolas;font-size:10px;color:#00AACC;font-weight:700;">H</div>
+          <div style="width:78px;height:2px;background:#00425A;"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── SLIDE 2 : THE PROBLEM ───────────────────────────────────────── -->
+  <div class="slide">
+    <div class="slide-header">
+      <h2>The Problem</h2>
+      <div class="sub">Constant or Balanced — and how do you know?</div>
+    </div>
+    <div class="slide-inner" style="padding-top:0;">
+      <div class="row">
+        <div class="col col-55" style="gap:1.2vh;">
+          <p>You have a black-box function f that returns 0 or 1.<br>You are told it is one of two types:</p>
+          <div class="type-card on">
+            <div class="title accent">CONSTANT</div>
+            <div class="desc">Returns the same value (0 or 1) for every input</div>
+          </div>
+          <div class="type-card off">
+            <div class="title" style="color:#8CBBD0;">BALANCED</div>
+            <div class="desc">Returns 0 for exactly half the inputs, 1 for the other half</div>
+          </div>
+        </div>
+        <div class="col col-45">
+          <div class="right-panel" style="flex:1;">
+            <h3 style="color:#456070;">Classical</h3>
+            <p>Worst case: must check more than half of all possible inputs before you can be certain.</p>
+            <div class="divider"></div>
+            <h3>Quantum</h3>
+            <p class="big">1 query.<br>Every time.</p>
+            <p class="muted" style="font-style:italic;">That's the promise of Deutsch-Jozsa.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── SLIDE 3 : SETUP & CONNECTION ───────────────────────────────── -->
+  <div class="slide">
+    <div class="slide-header">
+      <h2>1. Setup &amp; Connection</h2>
+      <div class="sub">Imports · Backend · Noise Model</div>
+    </div>
+    <div class="slide-inner" style="padding-top:0;">
+      <div class="row">
+        <div class="col col-55">
+          <pre>from qiskit_ibm_runtime import QiskitRuntimeService
+from qiskit_ibm_runtime import SamplerV2 as Sampler
+from qiskit.primitives import BackendSamplerV2
+from qiskit_aer import AerSimulator
+from qiskit_aer.noise import NoiseModel
+from qiskit import QuantumCircuit
+import numpy as np
+
+# Connect to the least-busy real IBM backend
+service = QiskitRuntimeService()
+backend = service.least_busy(
+    operational=True, simulator=False, min_num_qubits=6
+)
+# Mirror that backend's noise into a local simulator
+noise_model = NoiseModel.from_backend(backend)
+backend_sim = AerSimulator(noise_model=noise_model)
+sampler_sim = BackendSamplerV2(backend=backend_sim)</pre>
+        </div>
+        <div class="col col-45" style="gap:1vh;">
+          <div class="card"><div class="label">least_busy()</div><p>Selects the live IBM device with the shortest job queue</p></div>
+          <div class="card"><div class="label">NoiseModel</div><p>Captures real hardware error rates for realistic simulation</p></div>
+          <div class="card"><div class="label">AerSimulator</div><p>Runs the noisy circuit locally — no hardware queue needed</p></div>
+          <div class="card"><div class="label">BackendSamplerV2</div><p>Executes transpiled circuits and collects measurement counts</p></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── SLIDE 4 : ORACLE — CONSTANT ─────────────────────────────────── -->
+  <div class="slide">
+    <div class="slide-header">
+      <h2>2. The Oracle</h2>
+      <div class="sub">Constant Function</div>
+    </div>
+    <div class="slide-inner" style="padding-top:0;">
+      <div class="row">
+        <div class="col col-55" style="gap:1.2vh;">
+          <pre>def dj_function(num_qubits):
+    qc_dj = QuantumCircuit(num_qubits + 1)
+
+    # Maybe flip the ancilla (still a constant function)
+    if np.random.randint(0, 2):
+        qc_dj.x(num_qubits)
+
+    # 50% chance: return early -> constant function
+    if np.random.randint(0, 2):
+        return qc_dj
+
+    # Otherwise: continue to build balanced...</pre>
+          <div class="accent-card">
+            <p style="font-family:Consolas;font-size:clamp(9px,1.05vw,12px);color:#B8D8ED;">
+              f(00000)=0 &nbsp; f(00001)=0 &nbsp; f(10101)=0 &nbsp; ... &nbsp; f(11111)=0
+            </p>
+          </div>
+        </div>
+        <div class="col col-45">
+          <div class="right-panel" style="flex:1;">
+            <h3>Constant oracle</h3>
+            <p>The function returns the same value for every input.</p>
+            <p>The ancilla flip just swaps constant-0 to constant-1 — still constant either way.</p>
+            <p>If the second coin flip returns 1 we exit early. The oracle does nothing to the input qubits. That is the constant case.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── SLIDE 5 : ORACLE — BALANCED ─────────────────────────────────── -->
+  <div class="slide">
+    <div class="slide-header">
+      <h2>2. The Oracle</h2>
+      <div class="sub">Balanced Function — The Conjugate Pattern</div>
+    </div>
+    <div class="slide-inner" style="padding-top:0;">
+      <div class="row">
+        <div class="col col-55">
+          <pre>on_states = np.random.choice(
+    range(2**num_qubits),
+    2**num_qubits // 2,   # exactly half
+    replace=False,
+)
+
+def add_cx(qc_dj, bit_string):
+    for qubit, bit in enumerate(reversed(bit_string)):
+        if bit == "1":
+            qc_dj.x(qubit)
+    return qc_dj
+
+for state in on_states:
+    qc_dj = add_cx(qc_dj, f"{state:0{num_qubits}b}")
+    qc_dj.mcx(list(range(num_qubits)), num_qubits)
+    qc_dj = add_cx(qc_dj, f"{state:0{num_qubits}b}")</pre>
+          <p style="margin-top:1vh;font-style:italic;color:#456070;">
+            Half the states flip the ancilla. Half do not. That is what makes it balanced.
+          </p>
+        </div>
+        <div class="col col-45" style="gap:1vh;">
+          <div class="card"><div class="label">X gates ON</div><p>Flip qubits so this state looks like |11111⟩</p></div>
+          <div class="card"><div class="label">mcx(...)</div><p>Multi-controlled X fires — ancilla flips for this state only</p></div>
+          <div class="card"><div class="label">X gates OFF</div><p>Restore qubits — same flips undo each other</p></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── SLIDE 6 : BUILD THE CIRCUIT ─────────────────────────────────── -->
+  <div class="slide">
+    <div class="slide-header">
+      <h2>3. Build the Circuit</h2>
+      <div class="sub">6 lines. The complete Deutsch-Jozsa circuit.</div>
+    </div>
+    <div class="slide-inner" style="padding-top:0;">
+      <div class="row">
+        <div class="col col-55" style="gap:1.2vh;">
+          <pre>n = 5  # number of input qubits
+
+qc_dj = QuantumCircuit(n + 1, n)
+
+qc_dj.x(n)                           # ancilla to |1>
+qc_dj.h(range(n + 1))                # Hadamard all qubits
+qc_dj.barrier()
+qc_dj.compose(oracle, inplace=True)  # apply oracle
+qc_dj.barrier()
+qc_dj.h(range(n))                    # Hadamard inputs only
+qc_dj.measure(range(n), range(n))    # measure</pre>
+          <div class="circuit-sketch">
+|0&gt; -- H -- [  oracle  ] -- H -- M<br>
+|0&gt; -- H -- [  oracle  ] -- H -- M<br>
+|1&gt; -- H -- [  oracle  ] ---------
+          </div>
+        </div>
+        <div class="col col-45" style="gap:0.8vh;">
+          <div class="card"><div class="label">x(n)</div><p>Ancilla to |1⟩ — becomes |−⟩ after Hadamard</p></div>
+          <div class="card"><div class="label">h(all)</div><p>Inputs into superposition. Ancilla into |−⟩</p></div>
+          <div class="card"><div class="label">oracle</div><p>Phase kickback encodes f into the input phases</p></div>
+          <div class="card"><div class="label">h(inputs)</div><p>Interference converts phases into measurable bits</p></div>
+          <div class="card"><div class="label">measure</div><p>Read the answer from the input register</p></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── SLIDE 7 : TRANSPILE ──────────────────────────────────────────── -->
+  <div class="slide">
+    <div class="slide-header">
+      <h2>4. Transpile for Hardware</h2>
+      <div class="sub">Rewrite the circuit in the hardware's native gate language</div>
+    </div>
+    <div class="slide-inner" style="padding-top:0;">
+      <div class="row">
+        <div class="col col-55" style="gap:1.2vh;">
+          <pre>target = backend.target
+pm = generate_preset_pass_manager(
+    target=target,
+    optimization_level=3
+)
+qc_isa = pm.run(qc_dj)</pre>
+          <div class="card" style="background:#0C1B2E;border-color:#1C3A5C;">
+            <p style="font-family:Consolas;font-size:clamp(9px,1.1vw,13px);color:#456070;margin-bottom:5px;">
+              Original circuit:&nbsp;&nbsp;&nbsp; depth 4, &nbsp;19 gates
+            </p>
+            <p style="font-family:Consolas;font-size:clamp(9px,1.1vw,13px);color:#00AACC;">
+              Transpiled circuit: depth 7, &nbsp;40 gates
+            </p>
+          </div>
+          <div class="accent-card" style="text-align:left;">
+            <p style="font-family:Consolas;font-weight:700;color:#00AACC;font-size:clamp(9px,1.2vw,13px);">
+              Backend: ibm_fez &nbsp;|&nbsp; optimization_level: 3
+            </p>
+          </div>
+        </div>
+        <div class="col col-45">
+          <div class="right-panel" style="flex:1;">
+            <h3>Why transpile?</h3>
+            <p>Real quantum hardware supports only a small set of native gates (CX, Rz, SX) on specific qubit pairs.</p>
+            <p>Transpilation rewrites your circuit into those native gates and routes operations across the chip's physical qubit topology.</p>
+            <p>More gates, same result — the hardware just needs smaller steps.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── SLIDE 8 : RUN THE CIRCUIT ───────────────────────────────────── -->
+  <div class="slide">
+    <div class="slide-header">
+      <h2>5. Run the Circuit</h2>
+      <div class="sub">shots = 1</div>
+    </div>
+    <div class="slide-inner" style="padding-top:0;">
+      <div class="row">
+        <div class="col col-55" style="gap:1.2vh;">
+          <pre>USE_SIMULATOR = True
+
+if USE_SIMULATOR:
+    job = sampler_sim.run([qc_isa], shots=1)
+else:
+    job = sampler.run([qc_isa], shots=1)
+
+print(f"Job ID: {job.job_id()}")
+
+while True:
+    status = job.status()
+    print(f"Status: {status}")
+    if 'DONE' in str(status):
+        break
+    time.sleep(10)
+
+print("Job completed!")</pre>
+          <div class="card" style="padding:7px 14px;">
+            <p style="font-family:Consolas;font-size:clamp(8px,1vw,11px);color:#B8D8ED;">
+              Status: JobStatus.RUNNING &nbsp;=&gt;&nbsp; Status: JobStatus.DONE &nbsp;=&gt;&nbsp; ✓
+            </p>
+          </div>
+        </div>
+        <div class="col col-45">
+          <div class="right-panel" style="flex:1;">
+            <h3>Why shots = 1?</h3>
+            <p>Deutsch-Jozsa is deterministic. Quantum interference guarantees the same correct answer on every single run.</p>
+            <p class="white" style="font-weight:700;">One shot is sufficient.</p>
+            <p>The USE_SIMULATOR flag lets you switch between the noisy local simulator and real IBM hardware without touching the logic.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── SLIDE 9 : READ THE RESULTS ──────────────────────────────────── -->
+  <div class="slide">
+    <div class="slide-header">
+      <h2>5. Read the Results</h2>
+      <div class="sub">All zeros = constant. &nbsp; Any ones = balanced.</div>
+    </div>
+    <div class="slide-inner" style="padding-top:0;">
+      <div class="row">
+        <div class="col col-55" style="gap:1.2vh;">
+          <pre>res = job.result()
+counts = res[0].data.c.get_counts()
+
+print(f"Measurement result: {counts}")
+
+if "0" * n in counts:
+    print("Result: CONSTANT function")
+else:
+    print("Result: BALANCED function")</pre>
+          <div class="decision-row">
+            <div class="decision-box">
+              <div class="code-val">00000</div>
+              <div class="type-label">CONSTANT</div>
+            </div>
+            <div class="decision-box dim">
+              <div class="code-val">01010</div>
+              <div class="type-label">BALANCED</div>
+            </div>
+          </div>
+        </div>
+        <div class="col col-45">
+          <div class="right-panel" style="flex:1;">
+            <h3>Why does it work?</h3>
+            <p><strong style="color:#8CBBD0;">Constant:</strong> all inputs pick up the same phase. The second Hadamard layer constructively interferes everything back into |00000⟩.</p>
+            <p><strong style="color:#8CBBD0;">Balanced:</strong> inputs pick up opposite phases. Interference cancels the |00000⟩ amplitude entirely. You always get a non-zero result.</p>
+            <p class="accent" style="font-weight:700;font-style:italic;">One query. Certain answer.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── SLIDE 10 : FULL OUTPUT ───────────────────────────────────────── -->
+  <div class="slide">
+    <div class="slide-header">
+      <h2>Full Output</h2>
+    </div>
+    <div class="slide-inner" style="padding-top:0;">
+      <div class="col col-full" style="gap:1.2vh;">
+        <pre style="flex:1;">Using backend: ibm_fez
+Oracle created with 6 qubits
+Original circuit:    depth 4,  19 gates
+Transpiled circuit:  depth 7,  40 gates
+
+Running on simulator...
+
+Job ID: ed128622-ef3c-4637-9a73-100421cbf125
+Waiting for job to complete...
+Status: JobStatus.RUNNING
+Status: JobStatus.DONE
+
+Job completed!
+
+Measurement result: {'00000': 1}
+Result: CONSTANT function</pre>
+        <div class="output-bar">
+          {'00000': 1} &nbsp;→&nbsp; all zeros &nbsp;→&nbsp; CONSTANT &nbsp; ✓
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── SLIDE 11 : CONCLUSION ───────────────────────────────────────── -->
+  <div class="slide">
+    <div class="left-bar"></div>
+    <div class="slide-inner" style="justify-content:center;gap:1.5vh;">
+      <h1>That's Deutsch-Jozsa.</h1>
+      <div class="divider" style="width:40%;margin:0.5vh 0;"></div>
+      <div class="row" style="flex:unset;align-items:flex-start;gap:4vw;">
+        <ul style="flex:1;gap:1.1vh;">
+          <li>Random oracle — constant or balanced</li>
+          <li>Ancilla to |−⟩ enables phase kickback</li>
+          <li>Superposition evaluates all inputs simultaneously</li>
+          <li>Interference collapses phases into measurable bits</li>
+          <li class="highlight">One query. Certain answer.</li>
+        </ul>
+        <div class="recap-card" style="width:32%;">
+          <h3>Code Sections</h3>
+          <div class="sec">1. Setup &amp; Connection</div>
+          <div class="sec">2. Oracle Function</div>
+          <div class="sec">3. Build Circuit</div>
+          <div class="sec">4. Transpile</div>
+          <div class="sec">5. Run &amp; Interpret</div>
+        </div>
+      </div>
+      <div class="footer-link">
+        github.com/eric-kharitonov/Deutsch-Jozsa-Replication
+      </div>
+    </div>
+  </div>
+
+</div><!-- #deck -->
+
+<div id="progress"><div id="progress-bar"></div></div>
+<div id="counter">1 / 11</div>
+<div id="hint">← → to navigate &nbsp;|&nbsp; F for fullscreen</div>
+
+<script>
+  const slides = document.querySelectorAll('.slide');
+  let current = 0;
+
+  function show(n) {
+    slides[current].classList.remove('active');
+    current = Math.max(0, Math.min(n, slides.length - 1));
+    slides[current].classList.add('active');
+    document.getElementById('counter').textContent = (current + 1) + ' / ' + slides.length;
+    document.getElementById('progress-bar').style.width = ((current + 1) / slides.length * 100) + '%';
+  }
+
+  document.addEventListener('keydown', e => {
+    if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'PageDown') { e.preventDefault(); show(current + 1); }
+    if (e.key === 'ArrowLeft'  || e.key === 'PageUp')  { e.preventDefault(); show(current - 1); }
+    if (e.key === 'f' || e.key === 'F') document.documentElement.requestFullscreen?.();
+    if (e.key === 'Home') show(0);
+    if (e.key === 'End')  show(slides.length - 1);
+  });
+
+  document.getElementById('deck').addEventListener('click', e => {
+    if (e.clientX > window.innerWidth / 2) show(current + 1);
+    else show(current - 1);
+  });
+
+  show(0);
+</script>
+</body>
+</html>
